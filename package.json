@@ -1,16 +1,23 @@
 {
   "name": "source-quorum",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "SourceQuorum — reusable multi-source fact settlement primitive for GenLayer Intelligent Contracts",
+  "description": "SourceQuorum — public-fact bonds on GenLayer. Independent sources must agree before GEN moves.",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "test:math": "node --test tests/quorum_math.node.test.js",
-    "deploy:studionet": "node scripts/deploy.mjs studionet",
-    "deploy:bradbury": "node scripts/deploy.mjs bradbury",
-    "deploy:localnet": "node scripts/deploy.mjs localnet"
+    "deploy:studionet": "node scripts/deploy.mjs studionet --with-bond",
+    "deploy:bradbury": "node scripts/deploy.mjs bradbury --with-bond",
+    "deploy:localnet": "node scripts/deploy.mjs localnet --with-bond"
   },
   "dependencies": {
-    "genlayer-js": "^0.20.0"
+    "genlayer-js": "^1.1.8",
+    "viem": "^2.55.10"
+  },
+  "devDependencies": {
+    "vite": "^8.1.1"
   }
 }

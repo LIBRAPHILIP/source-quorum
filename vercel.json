@@ -1,29 +1,6 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "echo skip-install",
-  "buildCommand": "echo skip-build",
-  "outputDirectory": ".",
-  "cleanUrls": true,
-  "headers": [
-    {
-      "source": "/contracts/(.*)",
-      "headers": [
-        { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
-      ]
-    },
-    {
-      "source": "/docs/(.*)",
-      "headers": [
-        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
-      ]
-    },
-    {
-      "source": "/lib/(.*)",
-      "headers": [
-        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
-      ]
-    }
-  ]
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

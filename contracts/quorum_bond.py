@@ -18,7 +18,7 @@ import json
 import typing
 
 
-VERSION = "1.0.0-quorum-bond"
+VERSION = "1.1.0-quorum-bond"
 
 
 @gl.contract_interface
@@ -77,6 +77,24 @@ class QuorumBond(gl.Contract):
     def preview_settlement(self, claim_id: str) -> str:
         oracle = SourceQuorumIface(self.oracle)
         return oracle.view().get_settlement(claim_id)
+
+    @gl.public.view
+    def list_bonds(self, offset: u256, limit: u256) -> typing.Any:
+        off = max(0, int(offset))
+        lim = int(limit)
+        if lim <= 0:
+            lim = 10
+        if lim > 50:
+            lim = 50
+        total = int(self.bond_count)
+        out: list[str] = []
+        idx = total - 1 - off
+        while idx >= 0 and len(out) < lim:
+            key = str(idx)
+            if key in self.bonds:
+                out.append(self.bonds[key])
+            idx -= 1
+        return out
 
     @gl.public.write.payable
     def create_bond(
