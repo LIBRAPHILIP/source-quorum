@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SourceQuorum — GenLayer Intelligent Contract primitive</title>
+  <meta name="description" content="Reusable multi-source fact settlement primitive for GenLayer. Independent validator re-fetch, field-level equivalence, deterministic quorum math." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav>
+      <a class="mark" href="#">Source<span>Quorum</span></a>
+      <div class="sub">GenLayer Intelligent Contract primitive</div>
+      <a href="#why">Purpose</a>
+      <a href="#consensus">Consensus</a>
+      <a href="#state">State</a>
+      <a href="#math">Quorum math</a>
+      <a href="#compose">Compose</a>
+      <a href="#api">API</a>
+      <a href="#source">Source</a>
+      <a href="#deploy">Deploy</a>
+      <a href="https://github.com/LIBRAPHILIP/source-quorum">GitHub</a>
+    </nav>
+
+    <main>
+      <p class="kicker">Intelligent Contracts · not a product app</p>
+      <h1>Settle a fact from several sources. Not from one model’s opinion.</h1>
+      <p class="lede">
+        SourceQuorum is a reusable GenLayer primitive. Validators independently
+        re-fetch a locked source set, extract one structured fact per page, and
+        agree on those facts. Settlement is then computed by deterministic
+        quorum math. The LLM never writes the outcome.
+      </p>
+      <div class="pills">
+        <span class="pill">gl.vm.run_nondet_unsafe</span>
+        <span class="pill">independent web.get</span>
+        <span class="pill">field-level equivalence</span>
+        <span class="pill">UNRESOLVED gate</span>
+        <span class="pill">challenge as extra source</span>
+        <span class="pill">get_settlement consumer API</span>
+      </div>
+
+      <section id="why">
+        <h2>Purpose</h2>
+        <p>
+          Other builders need an oracle they can point a bond, an insurance
+          trigger, or a market resolver at. Official samples teach the SDK with
+          one URL and a single LLM answer. That is useful. It is not a primitive.
+        </p>
+        <div class="grid-2">
+          <div class="card">
+            <h3>This category</h3>
+            <p>Standalone contracts, readable source, real consensus, tests, and an explanation of how validators agree. No product flow.</p>
+          </div>
+          <div class="card">
+            <h3>Not this</h3>
+            <p>Hello-world storage. Thin <code>exec_prompt</code> wrappers. Format-only validators. Generic “AI decides X” dockets. Full apps belong under Projects.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="consensus">
+        <h2>How consensus is used</h2>
+        <p>
+          Every <code>resolve</code> call is a GenLayer non-deterministic block.
+          The leader proposes a report list. Validators do not grade the
+          leader’s JSON shape. They run the same fetch + extract path and
+          compare decision fields.
+        </p>
+        <pre>leader_fn:
+  for url in locked_sources:
+      page = gl.nondet.web.get(url)
+      fact = gl.nondet.exec_prompt(extract from THIS page only)
+
+validator_fn(leader_result):
+  if not isinstance(leader_result, gl.vm.Return): classify error
+  if report URLs ≠ locked set: reject
+  mine = leader_fn()                  # independent evidence
+  compare fetch_ok, outcome, number
+  ignore excerpt, confidence, HTML
+  UNRESOLVED vs a concrete outcome → reject (retry)
+
+reports = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+settlement = compute_quorum(claim, reports)   # deterministic
+self.claims[id] = persist(reports, settlement)</pre>
+        <p class="note">
+          Storage writes, contract calls, and transfers happen only after
+          consensus. That is a GenVM rule, and the reason composing contracts
+          read <code>get_settlement</code> instead of re-running an LLM.
+        </p>
+        <p>The full specification is in <a href="./docs/CONSENSUS.md">docs/CONSENSUS.md</a>.</p>
+      </section>
+
+      <section id="state">
+        <h2>State machine</h2>
+        <div class="machine">DRAFT ──add_source── lock_sources → LOCKED
+                                │
+                           resolve()
+                                │
+                    ┌───────────┴───────────┐
+                    ▼                       ▼
+                 SETTLED               UNRESOLVED
+                    │                       │
+                    └──── challenge() ──────┘
+                                │
+                           CHALLENGED
+                                │
+                           resolve()
+                                │
+                           SETTLED ── finalize() → FINAL</div>
+        <p>
+          A challenge adds one new HTTPS URL and spends budget. The next
+          resolve must re-fetch the whole expanded set. <code>FINAL</code> is
+          the immutable consumer snapshot. Details in
+          <a href="./docs/STATE.md">docs/STATE.md</a>.
+        </p>
+      </section>
+
+      <section id="math">
+        <h2>Quorum math</h2>
+        <p>
+          The same algorithm lives in the contract (GenVM is self-contained)
+          and in <a href="./lib/quorum_math.py">lib/quorum_math.py</a> so it
+          can be unit-tested without Studio.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Type</th><th>Extract</th><th>Settle when</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>BINARY</code></td>
+              <td><code>YES</code> / <code>NO</code></td>
+              <td>Winner ≥ <code>min_quorum</code> and strictly ahead of second place</td>
+            </tr>
+            <tr>
+              <td><code>ENUM</code></td>
+              <td>One allow-listed label</td>
+              <td>Same majority rule. Disallowed labels are ignored</td>
+            </tr>
+            <tr>
+              <td><code>NUMERIC</code></td>
+              <td>A number from the page</td>
+              <td>≥ <code>min_quorum</code> values inside <code>tolerance_bps</code> of the median. Settled value is the median of that band</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Ties, insufficient coverage, and numeric dispersion store
+          <code>UNRESOLVED</code>. That is a first-class status. Reviewers can
+          run <code>node --test tests/quorum_math.node.test.js</code>.
+        </p>
+      </section>
+
+      <section id="compose">
+        <h2>Compose with QuorumBond</h2>
+        <p>
+          <a href="./contracts/quorum_bond.py">quorum_bond.py</a> is a consumer,
+          not a second oracle. It never calls an LLM. It reads the primitive
+          through a typed interface and releases bonded GEN.
+        </p>
+        <pre>@gl.contract_interface
+class SourceQuorumIface:
+    class View:
+        def get_settlement(self, claim_id: str) -> str: ...
+
+oracle = SourceQuorumIface(self.oracle)
+settlement = json.loads(oracle.view().get_settlement(claim_id))
+# then assign payee; withdraw emits on='finalized'</pre>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Parametric</h3>
+            <p>NUMERIC claim over three official pages. Bond pays if the median lands inside a range.</p>
+          </div>
+          <div class="card">
+            <h3>Public criterion</h3>
+            <p>BINARY claim: rubric page + deliverable page. Bond pays the author on YES.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="api">
+        <h2>Contract API</h2>
+        <h3>SourceQuorum writes</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Who</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>create_claim(...)</code></td><td>anyone</td><td>Open a DRAFT typed claim</td></tr>
+            <tr><td><code>add_source</code></td><td>creator</td><td>Append a unique HTTPS URL</td></tr>
+            <tr><td><code>lock_sources</code></td><td>creator</td><td>Freeze the set</td></tr>
+            <tr><td><code>resolve</code></td><td>anyone</td><td>Consensus extract + quorum</td></tr>
+            <tr><td><code>challenge</code></td><td>anyone</td><td>Add one source, reopen</td></tr>
+            <tr><td><code>finalize</code></td><td>anyone</td><td>Freeze SETTLED → FINAL</td></tr>
+          </tbody>
+        </table>
+        <h3>SourceQuorum views</h3>
+        <p>
+          <code>get_settlement(claim_id)</code> is the only surface a composing
+          contract should need. Also: <code>get_claim</code>,
+          <code>list_claims</code>, <code>get_meta</code>,
+          <code>describe_primitive</code>.
+        </p>
+      </section>
+
+      <section id="source">
+        <h2>Readable source</h2>
+        <p>
+          The contracts in this deployment are the same files in the
+          repository. Open them raw if you want to paste into Studio.
+        </p>
+        <div class="tabs">
+          <button class="on" data-src="./contracts/source_quorum.py" type="button">source_quorum.py</button>
+          <button data-src="./contracts/quorum_bond.py" type="button">quorum_bond.py</button>
+          <button data-src="./lib/quorum_math.py" type="button">quorum_math.py</button>
+        </div>
+        <pre id="source-view">Loading contract…</pre>
+      </section>
+
+      <section id="deploy">
+        <h2>Deploy and test</h2>
+        <pre>git clone https://github.com/LIBRAPHILIP/source-quorum
+cd source-quorum
+
+# settlement math (no GenVM)
+node --test tests/quorum_math.node.test.js
+
+# Studio: paste contracts/source_quorum.py
+# then deploy quorum_bond.py with the oracle address
+
+npm install
+npm run deploy:studionet
+node scripts/deploy.mjs studionet --with-bond</pre>
+        <p>
+          Full notes live in the
+          <a href="https://github.com/LIBRAPHILIP/source-quorum">GitHub README</a>.
+          Deployed addresses, when present, are written to
+          <a href="./deployments/">deployments/</a>.
+        </p>
+        <p id="deploy-slot" class="note">No on-chain address in this snapshot yet. Deploy from Studio or <code>npm run deploy:studionet</code>.</p>
+      </section>
+
+      <footer>
+        SourceQuorum · MIT · built as a GenLayer Intelligent Contract primitive.
+        Docs site only — the work is the contracts.
+      </footer>
+    </main>
+  </div>
+  <script src="./app.js"></script>
+</body>
+</html>

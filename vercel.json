@@ -1,0 +1,18 @@
+{
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/contracts/(.*)",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    },
+    {
+      "source": "/docs/(.*)",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+      ]
+    }
+  ]
+}

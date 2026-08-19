@@ -1,0 +1,18 @@
+networks:
+  default: localnet
+  localnet:
+    url: http://localhost:4000/api
+    leader_only: false
+  studionet:
+    url: https://studio.genlayer.com/api
+    leader_only: false
+  testnet_bradbury:
+    url: https://rpc-bradbury.genlayer.com
+    accounts:
+      - "${ACCOUNT_PRIVATE_KEY_1}"
+      - "${ACCOUNT_PRIVATE_KEY_2}"
+contracts_dir: contracts
+default_wait_interval: 15000
+default_wait_retries: 20
+paths:
+  - tests

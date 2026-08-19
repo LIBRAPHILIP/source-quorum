@@ -1,0 +1,16 @@
+{
+  "name": "source-quorum",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SourceQuorum — reusable multi-source fact settlement primitive for GenLayer Intelligent Contracts",
+  "scripts": {
+    "test:math": "node --test tests/quorum_math.node.test.js",
+    "deploy:studionet": "node scripts/deploy.mjs studionet",
+    "deploy:bradbury": "node scripts/deploy.mjs bradbury",
+    "deploy:localnet": "node scripts/deploy.mjs localnet"
+  },
+  "dependencies": {
+    "genlayer-js": "^0.20.0"
+  }
+}

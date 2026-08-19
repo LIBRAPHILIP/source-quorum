@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vercel/
+.env
+.env.*
+!.env.example
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+*.pyc
+.DS_Store
+deployments/*.local.json
+site/embedded-source.js
