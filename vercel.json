@@ -1,4 +1,9 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "echo skip-install",
+  "buildCommand": "echo skip-build",
+  "outputDirectory": ".",
   "cleanUrls": true,
   "headers": [
     {
@@ -10,6 +15,12 @@
     },
     {
       "source": "/docs/(.*)",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+      ]
+    },
+    {
+      "source": "/lib/(.*)",
       "headers": [
         { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
       ]

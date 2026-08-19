@@ -1,6 +1,7 @@
 node_modules/
 dist/
-.vercel/
+.vercel/*
+!.vercel/project.json
 .env
 .env.*
 !.env.example
@@ -12,3 +13,5 @@ venv/
 .DS_Store
 deployments/*.local.json
 site/embedded-source.js
+
+.vercel

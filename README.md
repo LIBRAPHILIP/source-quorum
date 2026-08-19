@@ -6,6 +6,9 @@ The LLM does not decide the claim. Validators independently re-fetch every locke
 
 This repository is a contract primitive, not a product app.
 
+- GitHub: https://github.com/LIBRAPHILIP/source-quorum
+- Docs: https://source-quorum.vercel.app
+
 | | |
 |---|---|
 | Primitive | [`contracts/source_quorum.py`](contracts/source_quorum.py) |
@@ -13,7 +16,7 @@ This repository is a contract primitive, not a product app.
 | Settlement math | [`lib/quorum_math.py`](lib/quorum_math.py) |
 | Consensus spec | [`docs/CONSENSUS.md`](docs/CONSENSUS.md) |
 | State machine | [`docs/STATE.md`](docs/STATE.md) |
-| Docs site | published on Vercel from this repo |
+| Docs site | https://source-quorum.vercel.app |
 
 ## Why this exists
 
