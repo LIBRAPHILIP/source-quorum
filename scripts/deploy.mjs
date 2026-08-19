@@ -111,7 +111,7 @@ async function main() {
   mkdirSync(path.join(root, "deployments"), { recursive: true });
   const out = path.join(root, "deployments", `source-quorum-${chain.id}.json`);
   writeFileSync(out, JSON.stringify(payload, null, 2));
-  writeFileSync(path.join(root, "src", "deployed.json"), JSON.stringify(payload, null, 2));
+  writeFileSync(path.join(root, "deployed.json"), JSON.stringify(payload, null, 2));
   console.log("\nWrote", out);
 }
 

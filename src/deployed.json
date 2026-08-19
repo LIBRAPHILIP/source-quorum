@@ -1,5 +1,0 @@
-{
-  "primitive": "SourceQuorum",
-  "version": "1.1.0-source-quorum-app",
-  "note": "Filled by scripts/deploy.mjs or the in-app Deploy button after a real GenLayer deploy."
-}
