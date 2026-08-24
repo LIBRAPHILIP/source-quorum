@@ -5,8 +5,9 @@ SourceQuorum — reusable multi-source fact settlement primitive.
 Other builders compose this contract as an oracle. The LLM never decides the
 settlement. It only extracts a structured fact from each locked source.
 Validators independently re-fetch every source and re-extract those facts.
-After consensus on the extracts, settlement is computed by deterministic
-quorum math (coverage, majority-with-no-tie, numeric median band).
+After consensus, settlement is deterministic quorum math. NUMERIC results
+are canonicalized to integer ticks (4 d.p.) *inside* consensus so QuorumBond
+cannot pay different people from two validator-compatible medians.
 
 This is not a thin LLM wrapper and not a single-URL "AI decides X" demo.
 """
@@ -17,7 +18,7 @@ import json
 import typing
 
 
-VERSION = "1.0.0-source-quorum"
+VERSION = "1.1.0-source-quorum"
 MAX_SOURCES = 8
 MIN_SOURCES = 2
 MIN_QUORUM = 2
@@ -57,8 +58,8 @@ class SourceQuorum(gl.Contract):
             "version": self.version,
             "claim_count": str(self.claim_count),
             "primitive": "multi-source-quorum-oracle",
-            "consensus": "run_nondet_unsafe independent re-fetch + field compare",
-            "settlement": "deterministic quorum after agreed extracts",
+            "consensus": "run_nondet_unsafe independent re-fetch + canonical settlement",
+            "settlement": "quorum inside consensus; numeric_ticks exact match",
             "claim_types": ",".join(CLAIM_TYPES),
             "statuses": ",".join(STATUSES),
         }
@@ -91,6 +92,7 @@ class SourceQuorum(gl.Contract):
                 "status": rec["status"],
                 "outcome": rec.get("outcome", UNRESOLVED),
                 "numeric_value": rec.get("numeric_value"),
+                "numeric_ticks": rec.get("numeric_ticks"),
                 "finalized": rec["status"] == "FINAL",
                 "settled": rec["status"] in ("SETTLED", "FINAL"),
                 "tally": rec.get("tally", {}),
@@ -129,9 +131,9 @@ class SourceQuorum(gl.Contract):
             "leader": "Fetch every locked source, LLM-extract one structured fact per source.",
             "validator": "Re-fetch the same sources, re-extract, compare decision fields only.",
             "not_compared": "excerpt, rationale, confidence, raw HTML",
-            "compared": "url set, fetch_ok, outcome, numeric_value within tolerance_bps",
+            "compared": "url set, fetch_ok, outcome; settlement status/outcome/numeric_ticks exact",
             "gate": "UNRESOLVED vs a concrete outcome is never equivalent — forces retry.",
-            "settlement": "Deterministic quorum math after extracts are accepted.",
+            "settlement": "Quorum math runs inside consensus. NUMERIC stores integer ticks, not a raw leader median.",
             "compose": "Call get_settlement(claim_id) from another Intelligent Contract.",
         }
 
@@ -212,6 +214,7 @@ class SourceQuorum(gl.Contract):
             "reports": [],
             "outcome": UNRESOLVED,
             "numeric_value": None,
+            "numeric_ticks": None,
             "tally": {},
             "coverage": 0,
             "usable": 0,
@@ -274,43 +277,44 @@ class SourceQuorum(gl.Contract):
         claim_type = rec["claim_type"]
         allowed = list(rec["allowed_outcomes"])
         tolerance_bps = int(rec["tolerance_bps"])
+        min_quorum = int(rec["min_quorum"])
+        min_coverage = int(rec["min_coverage"])
         locked_urls = [s["url"] for s in sources]
 
         def leader_fn():
-            return _extract_all_sources(
+            reports = _extract_all_sources(
                 locked_urls, question, claim_type, allowed, tolerance_bps
             )
+            settlement = _compute_quorum(
+                claim_type, allowed, min_quorum, min_coverage, tolerance_bps, reports
+            )
+            return {"reports": reports, "settlement": settlement}
 
         def validator_fn(leader_result) -> bool:
             if not isinstance(leader_result, gl.vm.Return):
                 return _validator_handles_leader_error(leader_result, leader_fn)
-            leader_reports = leader_result.calldata
-            if not _valid_report_list(leader_reports, locked_urls):
+            leader_payload = leader_result.calldata
+            if not _valid_payload(leader_payload, locked_urls):
                 return False
             try:
-                validator_reports = leader_fn()
+                validator_payload = leader_fn()
             except Exception:
                 return False
-            return _reports_equivalent(
-                leader_reports, validator_reports, claim_type, tolerance_bps
+            return _payloads_equivalent(
+                leader_payload, validator_payload, claim_type, tolerance_bps
             )
 
-        reports = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
-        if not _valid_report_list(reports, locked_urls):
-            raise Exception("invalid_consensus_reports")
+        payload = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+        if not _valid_payload(payload, locked_urls):
+            raise Exception("invalid_consensus_payload")
 
-        settlement = _compute_quorum(
-            claim_type,
-            allowed,
-            int(rec["min_quorum"]),
-            int(rec["min_coverage"]),
-            tolerance_bps,
-            reports,
-        )
+        reports = payload["reports"]
+        settlement = payload["settlement"]
 
         rec["reports"] = reports
         rec["outcome"] = settlement["outcome"]
         rec["numeric_value"] = settlement["numeric_value"]
+        rec["numeric_ticks"] = settlement.get("numeric_ticks")
         rec["tally"] = settlement["tally"]
         rec["coverage"] = settlement["coverage"]
         rec["usable"] = settlement["usable"]
@@ -325,6 +329,7 @@ class SourceQuorum(gl.Contract):
                 "status": rec["status"],
                 "outcome": rec["outcome"],
                 "numeric_value": rec["numeric_value"],
+                "numeric_ticks": rec.get("numeric_ticks"),
                 "reason": rec["reason"],
                 "tally": rec["tally"],
                 "coverage": rec["coverage"],
@@ -540,6 +545,47 @@ def _parse_extract_json(raw: typing.Any, claim_type: str, allowed: list[str]) ->
     }
 
 
+def _valid_payload(payload: typing.Any, locked_urls: list[str]) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if not _valid_report_list(payload.get("reports"), locked_urls):
+        return False
+    settlement = payload.get("settlement")
+    if not isinstance(settlement, dict):
+        return False
+    if settlement.get("status") not in (SETTLED, UNRESOLVED):
+        return False
+    if settlement.get("status") == SETTLED and settlement.get("outcome") == "VALUE":
+        if settlement.get("numeric_ticks") is None:
+            return False
+    return True
+
+
+def _payloads_equivalent(
+    leader_payload: dict,
+    validator_payload: dict,
+    claim_type: str,
+    tolerance_bps: int,
+) -> bool:
+    if not _reports_equivalent(
+        leader_payload.get("reports"),
+        validator_payload.get("reports"),
+        claim_type,
+        tolerance_bps,
+    ):
+        return False
+    leader_s = leader_payload.get("settlement") or {}
+    validator_s = validator_payload.get("settlement") or {}
+    if leader_s.get("status") != validator_s.get("status"):
+        return False
+    if leader_s.get("outcome") != validator_s.get("outcome"):
+        return False
+    if bool(leader_s.get("quorum_met")) != bool(validator_s.get("quorum_met")):
+        return False
+    # Payout bucket: exact ticks, not a raw leader median.
+    return leader_s.get("numeric_ticks") == validator_s.get("numeric_ticks")
+
+
 def _valid_report_list(reports: typing.Any, locked_urls: list[str]) -> bool:
     if not isinstance(reports, list):
         return False
@@ -671,6 +717,7 @@ def _categorical_quorum(
         "status": SETTLED,
         "outcome": winner,
         "numeric_value": None,
+        "numeric_ticks": None,
         "reason": "quorum",
         "coverage": coverage,
         "usable": usable,
@@ -696,10 +743,12 @@ def _numeric_quorum(fetched: list, min_quorum: int, tolerance_bps: int, coverage
     if len(band) < min_quorum:
         return _fail("numeric_dispersion", tally, coverage)
     settled_value = _median(band)
+    ticks = _canonicalize_numeric(settled_value)
     return {
         "status": SETTLED,
         "outcome": "VALUE",
-        "numeric_value": settled_value,
+        "numeric_value": _ticks_to_display(ticks),
+        "numeric_ticks": ticks,
         "reason": "numeric_band",
         "coverage": coverage,
         "usable": len(band),
@@ -713,6 +762,7 @@ def _fail(reason: str, tally: dict, coverage: int) -> dict:
         "status": UNRESOLVED,
         "outcome": UNRESOLVED,
         "numeric_value": None,
+        "numeric_ticks": None,
         "reason": reason,
         "coverage": coverage,
         "usable": 0,
@@ -769,6 +819,30 @@ def _parse_number(raw):
         return float(text)
     except Exception:
         return None
+
+
+NUMERIC_SCALE = 10000
+
+
+def _canonicalize_numeric(value) -> typing.Any:
+    number = _parse_number(value)
+    if number is None:
+        return None
+    scaled = number * NUMERIC_SCALE
+    if scaled >= 0:
+        return int(scaled + 0.5)
+    return int(scaled - 0.5)
+
+
+def _ticks_to_display(ticks) -> typing.Any:
+    if ticks is None:
+        return None
+    ticks = int(ticks)
+    sign = "-" if ticks < 0 else ""
+    t = abs(ticks)
+    whole = t // NUMERIC_SCALE
+    frac = t % NUMERIC_SCALE
+    return f"{sign}{whole}.{frac:04d}"
 
 
 def _median(values: list[float]) -> float:

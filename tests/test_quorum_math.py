@@ -16,10 +16,15 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from lib.quorum_math import (  # noqa: E402
+    bond_matches_range,
+    canonicalize_numeric,
     compute_quorum,
-    reports_equivalent,
-    within_tolerance,
     median,
+    payloads_equivalent,
+    reports_equivalent,
+    settlements_equivalent,
+    ticks_to_display,
+    within_tolerance,
 )
 
 
@@ -106,7 +111,8 @@ class TestNumericQuorum(unittest.TestCase):
         ]
         result = compute_quorum("NUMERIC", [], 2, 2, 200, reports)
         self.assertEqual(result["status"], "SETTLED")
-        self.assertAlmostEqual(result["numeric_value"], 100.0, places=6)
+        self.assertEqual(result["numeric_ticks"], canonicalize_numeric(100.0))
+        self.assertEqual(result["numeric_value"], "100.0000")
 
     def test_outlier_breaks_band(self):
         reports = [
@@ -123,6 +129,45 @@ class TestNumericQuorum(unittest.TestCase):
 
     def test_even_median(self):
         self.assertEqual(median([1.0, 3.0]), 2.0)
+
+    def test_canonicalize_snaps_nearby_floats(self):
+        self.assertEqual(canonicalize_numeric(100.00004), canonicalize_numeric(100.0))
+        self.assertEqual(ticks_to_display(canonicalize_numeric(100)), "100.0000")
+        self.assertNotEqual(canonicalize_numeric(99.99), canonicalize_numeric(100.01))
+
+    def test_two_compatible_extracts_same_payee_bucket(self):
+        leader_reports = [
+            report("https://a.example/1", True, "VALUE", 100.0),
+            report("https://b.example/1", True, "VALUE", 100.0),
+            report("https://c.example/1", True, "VALUE", 100.0),
+        ]
+        validator_reports = [
+            report("https://a.example/1", True, "VALUE", 99.99996),
+            report("https://b.example/1", True, "VALUE", 100.00002),
+            report("https://c.example/1", True, "VALUE", 100.00004),
+        ]
+        leader = compute_quorum("NUMERIC", [], 2, 2, 200, leader_reports)
+        validator = compute_quorum("NUMERIC", [], 2, 2, 200, validator_reports)
+        self.assertTrue(
+            payloads_equivalent(
+                {"reports": leader_reports, "settlement": leader},
+                {"reports": validator_reports, "settlement": validator},
+                "NUMERIC",
+                200,
+            )
+        )
+        self.assertTrue(bond_matches_range(leader["numeric_ticks"], 99.5, 100.5))
+        self.assertEqual(
+            bond_matches_range(leader["numeric_ticks"], 100, 100),
+            bond_matches_range(validator["numeric_ticks"], 100, 100),
+        )
+
+    def test_straddling_medians_fail_settlement_equivalence(self):
+        low = {"status": "SETTLED", "outcome": "VALUE", "quorum_met": True, "numeric_ticks": canonicalize_numeric(99.99)}
+        high = {"status": "SETTLED", "outcome": "VALUE", "quorum_met": True, "numeric_ticks": canonicalize_numeric(100.01)}
+        self.assertFalse(settlements_equivalent(low, high))
+        self.assertTrue(bond_matches_range(high["numeric_ticks"], 100, 100))
+        self.assertFalse(bond_matches_range(low["numeric_ticks"], 100, 100))
 
 
 class TestEquivalence(unittest.TestCase):

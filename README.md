@@ -2,7 +2,7 @@
 
 **A reusable multi-source fact settlement primitive for [GenLayer](https://genlayer.com) Intelligent Contracts.**
 
-The LLM does not decide the claim. Validators independently re-fetch every locked source, re-extract a structured fact from each page, and compare **decision fields**. After that consensus, a deterministic quorum function settles the claim — coverage, majority-with-no-tie, or a numeric median band.
+The LLM does not decide the claim. Validators independently re-fetch every locked source, re-extract a structured fact from each page, and compare **decision fields**. Settlement (including the NUMERIC payout bucket) is computed **inside** consensus. Numeric results are integer ticks (`round(median * 10000)`), not a raw leader median, so QuorumBond cannot pay different people from two validator-compatible extracts.
 
 This repository is a contract primitive, not a product app.
 
@@ -49,14 +49,12 @@ create_claim → add_source* → lock_sources
         │
         ├─ validator_fn
         │     if leader is not Return → classify error
-        │     else re-run leader_fn
-        │     compare: url set, fetch_ok, outcome, numeric_value ± bps
-        │     do not compare: excerpt, confidence, raw HTML
+        │     else re-run leader_fn (extract + compute_quorum)
+        │     compare reports: url set, fetch_ok, outcome, number ± bps
+        │     compare settlement: status, outcome, numeric_ticks EXACT
         │
-        └─ compute_quorum(agreed reports)   # deterministic
-              coverage ≥ min_coverage
-              winner ≥ min_quorum and winner > second
-              or numeric median band
+        └─ persist canonical settlement
+              NUMERIC: integer ticks, not the leader's raw median
         │
         ▼
    SETTLED | UNRESOLVED
@@ -100,7 +98,7 @@ This follows GenLayer's documented production pattern: custom `run_nondet_unsafe
 
 ## Recipes other builders can copy
 
-**Parametric trigger.** `NUMERIC` claim, three weather or agency URLs, `min_quorum = 2`, `tolerance_bps = 200`. Bond pays if the settled median falls inside a range.
+**Parametric trigger.** `NUMERIC` claim, three weather or agency URLs, `min_quorum = 2`, `tolerance_bps = 200`. Bond pays if the consensus `numeric_ticks` fall inside a range.
 
 **Public-criterion bounty.** `BINARY` question: “Does this pull request description and linked report satisfy the posted rubric?” Sources are the rubric page and the deliverable. Bond releases to the author on `YES`.
 

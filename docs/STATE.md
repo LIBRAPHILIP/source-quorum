@@ -22,7 +22,8 @@ collections; the schema below is the contract.
 | `sources` | `{url,label}[]` | Locked after `lock_sources` |
 | `reports` | extract[] | Last consensus-accepted extracts |
 | `outcome` | string | Winning label or `UNRESOLVED` |
-| `numeric_value` | number \| null | Median of in-band values |
+| `numeric_value` | string \| null | Canonical decimal of `numeric_ticks` (`"100.0000"`) |
+| `numeric_ticks` | int \| null | Payout bucket: `round(median * 10000)`. Compared exactly in consensus. |
 | `tally` | object | Vote counts or band stats |
 | `coverage` / `usable` | int | Fetch vs usable-extract counts |
 | `reason` | string | Why it settled or failed |

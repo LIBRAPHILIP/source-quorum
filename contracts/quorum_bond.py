@@ -18,7 +18,8 @@ import json
 import typing
 
 
-VERSION = "1.0.0-quorum-bond"
+VERSION = "1.1.0-quorum-bond"
+NUMERIC_SCALE = 10000
 
 
 @gl.contract_interface
@@ -91,7 +92,7 @@ class QuorumBond(gl.Contract):
         Lock gl.message.value against a SourceQuorum claim.
 
         BINARY/ENUM: payout if settlement.outcome == expected_outcome.
-        NUMERIC: payout if numeric_value is inside [min, max] (inclusive).
+        NUMERIC: payout if consensus numeric_ticks is inside [min, max] (inclusive).
         Otherwise the funder may withdraw the refund after settle_bond.
         """
         value = gl.message.value
@@ -244,18 +245,37 @@ def _matches(bond: dict, settlement: dict) -> bool:
     expected = str(bond.get("expected_outcome", "")).upper()
     actual = str(settlement.get("outcome", "")).upper()
     if expected == "VALUE" or actual == "VALUE":
-        number = settlement.get("numeric_value")
-        if number is None or number == "":
+        ticks = _settlement_ticks(settlement)
+        if ticks is None:
             return False
-        try:
-            value = float(number)
-        except Exception:
+        nmin = _to_ticks(bond.get("expected_numeric_min"))
+        nmax = _to_ticks(bond.get("expected_numeric_max"))
+        if nmin is not None and ticks < nmin:
             return False
-        nmin = bond.get("expected_numeric_min")
-        nmax = bond.get("expected_numeric_max")
-        if nmin is not None and value < float(nmin):
-            return False
-        if nmax is not None and value > float(nmax):
+        if nmax is not None and ticks > nmax:
             return False
         return True
     return expected == actual and expected not in ("", "UNRESOLVED")
+
+
+def _settlement_ticks(settlement: dict) -> typing.Any:
+    raw = settlement.get("numeric_ticks")
+    if raw is not None and raw != "":
+        try:
+            return int(raw)
+        except Exception:
+            pass
+    return _to_ticks(settlement.get("numeric_value"))
+
+
+def _to_ticks(raw) -> typing.Any:
+    if raw is None or raw == "":
+        return None
+    try:
+        number = float(raw)
+    except Exception:
+        return None
+    scaled = number * NUMERIC_SCALE
+    if scaled >= 0:
+        return int(scaled + 0.5)
+    return int(scaled - 0.5)

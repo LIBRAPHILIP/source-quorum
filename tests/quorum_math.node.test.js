@@ -62,11 +62,30 @@ function withinTolerance(value, center, bps) {
   return Math.abs(value - center) / Math.abs(center) <= bps / 10000;
 }
 
+const NUMERIC_SCALE = 10000;
+
+function canonicalizeNumeric(value) {
+  const n = parseNumber(value);
+  if (n == null) return null;
+  const scaled = n * NUMERIC_SCALE;
+  return scaled >= 0 ? Math.trunc(scaled + 0.5) : Math.trunc(scaled - 0.5);
+}
+
+function ticksToDisplay(ticks) {
+  if (ticks == null) return null;
+  const sign = ticks < 0 ? "-" : "";
+  const t = Math.abs(ticks);
+  const whole = Math.floor(t / NUMERIC_SCALE);
+  const frac = t % NUMERIC_SCALE;
+  return `${sign}${whole}.${String(frac).padStart(4, "0")}`;
+}
+
 function fail(reason, tally, coverage) {
   return {
     status: UNRESOLVED,
     outcome: UNRESOLVED,
     numeric_value: null,
+    numeric_ticks: null,
     reason,
     coverage,
     quorum_met: false,
@@ -90,10 +109,12 @@ function computeQuorum(claimType, allowed, minQuorum, minCoverage, toleranceBps,
     const center = median(values);
     const band = values.filter((v) => withinTolerance(v, center, toleranceBps));
     if (band.length < minQuorum) return fail("numeric_dispersion", tally, coverage);
+    const ticks = canonicalizeNumeric(median(band));
     return {
       status: SETTLED,
       outcome: "VALUE",
-      numeric_value: median(band),
+      numeric_value: ticksToDisplay(ticks),
+      numeric_ticks: ticks,
       reason: "numeric_band",
       coverage,
       quorum_met: true,
@@ -118,6 +139,7 @@ function computeQuorum(claimType, allowed, minQuorum, minCoverage, toleranceBps,
     status: SETTLED,
     outcome: winner,
     numeric_value: null,
+    numeric_ticks: null,
     reason: "quorum",
     coverage,
     quorum_met: true,
@@ -235,7 +257,14 @@ test("numeric median band", () => {
     [r("https://a.example/1", true, "VALUE", 100), r("https://b.example/1", true, "VALUE", 101), r("https://c.example/1", true, "VALUE", 99.5)]
   );
   assert.equal(result.status, "SETTLED");
-  assert.equal(result.numeric_value, 100);
+  assert.equal(result.numeric_ticks, canonicalizeNumeric(100));
+  assert.equal(result.numeric_value, "100.0000");
+});
+
+test("straddling medians are different payout buckets", () => {
+  const low = canonicalizeNumeric(99.99);
+  const high = canonicalizeNumeric(100.01);
+  assert.notEqual(low, high);
 });
 
 test("numeric dispersion", () => {

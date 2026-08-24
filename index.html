@@ -145,7 +145,7 @@ self.claims[id] = persist(reports, settlement)</pre>
             <tr>
               <td><code>NUMERIC</code></td>
               <td>A number from the page</td>
-              <td>≥ <code>min_quorum</code> values inside <code>tolerance_bps</code> of the median. Settled value is the median of that band</td>
+              <td>≥ <code>min_quorum</code> values inside <code>tolerance_bps</code> of the median. Stored value is that median canonicalized to integer ticks (4 d.p.); validators must match the tick exactly</td>
             </tr>
           </tbody>
         </table>
@@ -174,7 +174,7 @@ settlement = json.loads(oracle.view().get_settlement(claim_id))
         <div class="grid-2">
           <div class="card">
             <h3>Parametric</h3>
-            <p>NUMERIC claim over three official pages. Bond pays if the median lands inside a range.</p>
+            <p>NUMERIC claim over three official pages. Bond pays if consensus <code>numeric_ticks</code> land inside a range.</p>
           </div>
           <div class="card">
             <h3>Public criterion</h3>

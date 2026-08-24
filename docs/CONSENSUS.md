@@ -16,22 +16,19 @@ reject that pattern. SourceQuorum does not use it.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. Non-deterministic extraction (inside run_nondet_unsafe)  │
-│    Leader and each validator independently:                 │
-│      for url in locked_sources:                             │
-│          page = gl.nondet.web.get(url)                      │
-│          fact = gl.nondet.exec_prompt(extract_one_source)   │
-│    Compared fields: url set, fetch_ok, outcome, number      │
-│    Ignored fields: excerpt, confidence, raw HTML            │
+│ Inside run_nondet_unsafe (leader and each validator)        │
+│   1. Re-fetch every locked source, extract one fact         │
+│   2. compute_quorum(...) on that node's own extracts        │
+│   3. NUMERIC: snap the median to integer ticks (4 d.p.)     │
+│ Compared:                                                   │
+│   reports — url set, fetch_ok, outcome, number ± bps        │
+│   settlement — status, outcome, quorum_met, numeric_ticks   │
+│ numeric_ticks must match exactly. A raw leader median is    │
+│ never the stored payout number.                             │
 └─────────────────────────────────────────────────────────────┘
-                              │ accepted extracts
+                              │ accepted payload
                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 2. Deterministic settlement (outside the nondet block)      │
-│    compute_quorum(claim_type, min_quorum, min_coverage,     │
-│                   tolerance_bps, reports)                   │
-│    Coverage gate → tally / median band → tie rejection      │
-└─────────────────────────────────────────────────────────────┘
+                 persist reports + canonical settlement
 ```
 
 Storage writes happen only after consensus returns. That is required:
@@ -69,11 +66,32 @@ Comparison rules:
 - `outcome` must match after normalization.
 - **Gate:** `UNRESOLVED` versus a concrete outcome is never equivalent.
   One node cannot "nudge" an unanswered source into a vote.
-- Numeric values must lie within `tolerance_bps` of each other
+- Per-source numeric extracts may differ within `tolerance_bps`
   (time drift / extraction jitter). A 0-center only matches 0.
+- **Settlement bucket is exact.** After each node computes quorum on
+  its own extracts, `status`, `outcome`, `quorum_met`, and
+  `numeric_ticks` must match. Two extract sets that would pay different
+  QuorumBond payees cannot both be accepted.
 
 Excerpt and confidence are stored for humans. They are not consensus
 inputs.
+
+## Numeric canonicalization (reviewer correction)
+
+v1.0 stored the leader's raw median after validators only checked
+per-source tolerance. That let two compatible report sets settle
+`99.99` vs `100.01` and flip a bond whose range was `[100, 100]`.
+
+v1.1:
+
+- Snap the in-band median to integer ticks: `round(value * 10000)`.
+- Store `numeric_ticks` plus the canonical decimal `numeric_value`
+  (`"100.0000"`).
+- Validators independently compute that tick and require equality.
+- QuorumBond compares ranges in tick space, not IEEE floats.
+
+If extracts are close but canonicalize to different ticks, consensus
+rejects and the transaction retries. That is the intended failure.
 
 ## Error classification
 
@@ -96,7 +114,7 @@ Implemented twice on purpose:
 |------------|-------------|
 | `BINARY`   | At least `min_quorum` independent `YES` or `NO` votes, and the winner strictly beats second place. |
 | `ENUM`     | Same rule over the allow-list. Disallowed labels are ignored. |
-| `NUMERIC`  | At least `min_quorum` extracted numbers, and at least `min_quorum` of them lie inside `tolerance_bps` of the median. Settled value is the median of that band. |
+| `NUMERIC`  | At least `min_quorum` extracted numbers, and at least `min_quorum` of them lie inside `tolerance_bps` of the median. Settled value is that median **canonicalized to integer ticks (4 d.p.)**. Validators must match those ticks exactly. |
 
 Ties, coverage failures, and numeric dispersion all return
 `UNRESOLVED`. That is a first-class status, not a crash.
@@ -120,6 +138,7 @@ is undetermined and state does not change.
 ## What composing contracts should read
 
 `get_settlement(claim_id)` is the only surface `QuorumBond` uses. It
-never re-runs an LLM. Cross-contract reads go through
+never re-runs an LLM. NUMERIC payouts compare `numeric_ticks` (integer
+4 d.p. buckets), not a raw float median. Cross-contract reads go through
 `gl.get_contract_at` / `@gl.contract_interface` in the deterministic
 context, as required by GenVM.

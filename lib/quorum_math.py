@@ -7,6 +7,11 @@ builders and reviewers unit-test the primitive without GenVM.
 
 The LLM is used only to extract structured facts from each source.
 Quorum, ties, coverage, and numeric bands are computed here.
+
+NUMERIC payouts do not store a raw leader median. The settled number is
+canonicalized to integer ticks (4 decimal places) and that tick is a
+consensus decision field. Two validator-compatible extract sets that
+would pay different QuorumBond payees cannot both be accepted.
 """
 
 from __future__ import annotations
@@ -18,6 +23,8 @@ SETTLED = "SETTLED"
 
 BINARY_OUTCOMES = ("YES", "NO")
 CLAIM_TYPES = ("BINARY", "ENUM", "NUMERIC")
+# 4 decimal places. 100.00 and 100.01 are distinct payout buckets.
+NUMERIC_SCALE = 10000
 
 
 def normalize_outcome(raw: Any, claim_type: str, allowed: list[str]) -> str:
@@ -85,6 +92,28 @@ def within_tolerance(value: float, center: float, tolerance_bps: int) -> bool:
     if center == 0.0:
         return value == 0.0
     return abs(value - center) / abs(center) <= (tolerance_bps / 10000.0)
+
+
+def canonicalize_numeric(value: Any) -> int | None:
+    """Snap a float to integer ticks (4 d.p.). None stays None."""
+    number = parse_number(value)
+    if number is None:
+        return None
+    scaled = number * NUMERIC_SCALE
+    if scaled >= 0:
+        return int(scaled + 0.5)
+    return int(scaled - 0.5)
+
+
+def ticks_to_display(ticks: int | None) -> str | None:
+    if ticks is None:
+        return None
+    ticks = int(ticks)
+    sign = "-" if ticks < 0 else ""
+    t = abs(ticks)
+    whole = t // NUMERIC_SCALE
+    frac = t % NUMERIC_SCALE
+    return f"{sign}{whole}.{frac:04d}"
 
 
 def compute_quorum(
@@ -155,6 +184,7 @@ def _categorical_quorum(
         "status": SETTLED,
         "outcome": winner,
         "numeric_value": None,
+        "numeric_ticks": None,
         "reason": "quorum",
         "coverage": coverage,
         "usable": usable,
@@ -189,10 +219,12 @@ def _numeric_quorum(
         return _fail("numeric_dispersion", reports, tally, coverage=coverage)
 
     settled_value = median(band)
+    ticks = canonicalize_numeric(settled_value)
     return {
         "status": SETTLED,
         "outcome": "VALUE",
-        "numeric_value": settled_value,
+        "numeric_value": ticks_to_display(ticks),
+        "numeric_ticks": ticks,
         "reason": "numeric_band",
         "coverage": coverage,
         "usable": len(band),
@@ -213,6 +245,7 @@ def _fail(
         "status": UNRESOLVED,
         "outcome": UNRESOLVED,
         "numeric_value": None,
+        "numeric_ticks": None,
         "reason": reason,
         "coverage": coverage,
         "usable": 0,
@@ -279,4 +312,56 @@ def reports_equivalent(
                 v_num, l_num, tolerance_bps
             ):
                 return False
+    return True
+
+
+def settlements_equivalent(leader: dict[str, Any], validator: dict[str, Any]) -> bool:
+    """Payout-relevant fields must match exactly. No leftover leader median."""
+    if not isinstance(leader, dict) or not isinstance(validator, dict):
+        return False
+    if leader.get("status") != validator.get("status"):
+        return False
+    if leader.get("outcome") != validator.get("outcome"):
+        return False
+    if bool(leader.get("quorum_met")) != bool(validator.get("quorum_met")):
+        return False
+    return leader.get("numeric_ticks") == validator.get("numeric_ticks")
+
+
+def payloads_equivalent(
+    leader_payload: dict[str, Any],
+    validator_payload: dict[str, Any],
+    claim_type: str,
+    tolerance_bps: int,
+) -> bool:
+    if not isinstance(leader_payload, dict) or not isinstance(validator_payload, dict):
+        return False
+    if not reports_equivalent(
+        leader_payload.get("reports") or [],
+        validator_payload.get("reports") or [],
+        claim_type,
+        tolerance_bps,
+    ):
+        return False
+    return settlements_equivalent(
+        leader_payload.get("settlement") or {},
+        validator_payload.get("settlement") or {},
+    )
+
+
+def bond_matches_range(
+    numeric_ticks: int | None,
+    expected_min: Any,
+    expected_max: Any,
+) -> bool:
+    """Integer-tick range used by QuorumBond. Same ticks ⇒ same payee."""
+    if numeric_ticks is None:
+        return False
+    ticks = int(numeric_ticks)
+    nmin = canonicalize_numeric(expected_min)
+    nmax = canonicalize_numeric(expected_max)
+    if nmin is not None and ticks < nmin:
+        return False
+    if nmax is not None and ticks > nmax:
+        return False
     return True
