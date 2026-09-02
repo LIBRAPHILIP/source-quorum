@@ -83,10 +83,58 @@ async function main() {
   const client = createClient({ chain, account });
   await client.initializeConsensusSmartContract();
 
+  if (netName === "studionet") {
+    const rpc = chain.rpcUrls?.default?.http?.[0] || "https://studio.genlayer.com/api";
+    const fundAmount = 100 * 10 ** 18;
+    console.log("Funding", account.address, "via sim_fundAccount…");
+    const fundRes = await fetch(rpc, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "sim_fundAccount",
+        params: [account.address, fundAmount],
+      }),
+    });
+    const fundJson = await fundRes.json();
+    if (fundJson.error) {
+      throw new Error("sim_fundAccount failed: " + JSON.stringify(fundJson.error));
+    }
+    console.log("Fund tx:", fundJson.result);
+    if (fundJson.result) {
+      try {
+        await client.waitForTransactionReceipt({
+          hash: fundJson.result,
+          status: TransactionStatus.ACCEPTED,
+          retries: 60,
+          interval: 2000,
+        });
+      } catch (e) {
+        console.log("Fund wait skipped:", e.message);
+      }
+    }
+  }
+
   const oracle = await deployOne(client, "contracts/source_quorum.py", [], "SourceQuorum");
+  try {
+    const meta = await client.readContract({
+      address: oracle.address,
+      functionName: "get_meta",
+      args: [],
+    });
+    console.log("get_meta:", meta);
+    const ver = String(meta?.version || "");
+    if (!ver.includes("1.1.0")) {
+      throw new Error("Deployed version is not 1.1.0: " + ver);
+    }
+  } catch (e) {
+    if (String(e.message || e).includes("not 1.1.0")) throw e;
+    console.log("get_meta wait/read:", e.message || e);
+  }
   const payload = {
     primitive: "SourceQuorum",
-    version: "1.0.0-source-quorum",
+    version: "1.1.0-source-quorum",
     address: oracle.address,
     chainId: chain.id,
     network: netName,

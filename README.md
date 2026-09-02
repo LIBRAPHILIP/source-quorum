@@ -17,6 +17,7 @@ This repository is a contract primitive, not a product app.
 | Consensus spec | [`docs/CONSENSUS.md`](docs/CONSENSUS.md) |
 | State machine | [`docs/STATE.md`](docs/STATE.md) |
 | Docs site | https://source-quorum.vercel.app |
+| Live v1.1.0 (Studionet) | [`0xf1B7D908C2570d8073F027eeB3f481771a3394BD`](https://explorer-studio.genlayer.com/address/0xf1B7D908C2570d8073F027eeB3f481771a3394BD) |
 
 ## Why this exists
 
@@ -144,6 +145,19 @@ PRIVATE_KEY=0x… npm run deploy:bradbury
 ```
 
 Addresses are written to `deployments/source-quorum-<chainId>.json`.
+
+## Live v1.1.0 (submit this Explorer URL)
+
+On-chain `get_meta.version` is `1.1.0-source-quorum`. Canonical `numeric_ticks` are compared inside consensus.
+
+```
+https://explorer-studio.genlayer.com/address/0xf1B7D908C2570d8073F027eeB3f481771a3394BD
+```
+
+QuorumBond (consumer): `0xb9e82942D4397258C143fE3Aa0bA1078Fc1a61fB`  
+Deploy tx: `0x18d83c23add7b08a275edd19fb41f117fe0b5ceb1014706e51ff9605d6904a43`
+
+Do not resubmit a v1.0.0 address.
 
 ## What this is not
 
