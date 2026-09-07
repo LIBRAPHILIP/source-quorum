@@ -1,15 +1,15 @@
 {
   "primitive": "SourceQuorum",
-  "version": "1.1.0-source-quorum",
-  "address": "0xf1B7D908C2570d8073F027eeB3f481771a3394BD",
+  "version": "1.2.0-source-quorum",
+  "address": "0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476",
   "chainId": 61999,
   "network": "studionet",
-  "deployTx": "0x18d83c23add7b08a275edd19fb41f117fe0b5ceb1014706e51ff9605d6904a43",
-  "explorer": "https://explorer-studio.genlayer.com/address/0xf1B7D908C2570d8073F027eeB3f481771a3394BD",
-  "deployedAt": "2026-09-02T00:25:24.252Z",
+  "deployTx": "0x985ea482cf79086df97bba2982d21e67d523a531038c42b5159ecb31c44e19c8",
+  "explorer": "https://explorer-studio.genlayer.com/address/0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476",
+  "deployedAt": "2026-09-07T00:34:26.888Z",
   "bond": {
-    "address": "0xb9e82942D4397258C143fE3Aa0bA1078Fc1a61fB",
-    "deployTx": "0x6e02371b7199f7eade71c5510d5c7483b64dd43eadf98f94e5e369793134897d",
-    "oracle": "0xf1B7D908C2570d8073F027eeB3f481771a3394BD"
+    "address": "0x19B4C3157bc73e218ffd9966f1a7c28093d33D83",
+    "deployTx": "0x57f4598eb4f57dba5618ac722c85ffa3c6fed122f5441c7fcb1e6ccb96b3afd7",
+    "oracle": "0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476"
   }
 }

@@ -261,6 +261,25 @@ test("numeric median band", () => {
   assert.equal(result.numeric_value, "100.0000");
 });
 
+test("cannot finalize during challenge window", () => {
+  const canFinalize = (status, now, until, budget) => {
+    if (status !== "SETTLED") return false;
+    if (budget <= 0) return true;
+    return now >= until;
+  };
+  const canChallenge = (status, used, budget, now, until) => {
+    if (used >= budget) return false;
+    if (status === "UNRESOLVED") return true;
+    if (status !== "SETTLED") return false;
+    return now < until;
+  };
+  assert.equal(canFinalize("SETTLED", 100, 200, 1), false);
+  assert.equal(canFinalize("SETTLED", 200, 200, 1), true);
+  assert.equal(canChallenge("SETTLED", 0, 1, 100, 200), true);
+  assert.equal(canChallenge("SETTLED", 0, 1, 200, 200), false);
+  assert.equal(canFinalize("SETTLED", 1, 999, 0), true);
+});
+
 test("straddling medians are different payout buckets", () => {
   const low = canonicalizeNumeric(99.99);
   const high = canonicalizeNumeric(100.01);

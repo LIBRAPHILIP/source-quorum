@@ -122,14 +122,25 @@ Ties, coverage failures, and numeric dispersion all return
 ## Challenge / finalize
 
 This is the primitive's appeal path, distinct from protocol-level
-validator appeals:
+validator appeals. It is **not optional** once a challenge budget is
+configured.
 
 1. `resolve` may be called in `LOCKED`, `UNRESOLVED`, or `CHALLENGED`.
-2. Anyone may `challenge` a `SETTLED` or `UNRESOLVED` claim by adding
-   one new HTTPS source, while `challenges_used < challenge_budget`.
-3. A challenged claim must be resolved again against the expanded set.
-4. `finalize` freezes a `SETTLED` claim. `get_settlement` then becomes
-   the immutable consumer API.
+2. A successful `SETTLED` result opens a **24-hour challenge window**
+   (`challenge_open_until = settled_at + 86400`) when
+   `challenge_budget > 0`. Time is the transaction datetime
+   (`time.time()` in GenVM).
+3. During that window, `finalize` reverts (`challenge_window_open`).
+   Anyone may `challenge` by adding one new HTTPS source, while budget
+   remains.
+4. After the window closes, challenges revert (`challenge_window_closed`)
+   and anyone may `finalize`.
+5. A challenged claim must be resolved again. A new SETTLED result
+   **restarts** the window.
+6. `get_settlement` is immutable only at `FINAL`.
+
+QuorumBond `settle_bond` requires `status == FINAL`. It must not assign
+a payee from a still-challengeable `SETTLED` result.
 
 Protocol-level appeals still apply to every write: if validators
 disagree, the leader rotates; if consensus cannot form, the transaction
@@ -139,6 +150,8 @@ is undetermined and state does not change.
 
 `get_settlement(claim_id)` is the only surface `QuorumBond` uses. It
 never re-runs an LLM. NUMERIC payouts compare `numeric_ticks` (integer
-4 d.p. buckets), not a raw float median. Cross-contract reads go through
-`gl.get_contract_at` / `@gl.contract_interface` in the deterministic
-context, as required by GenVM.
+4 d.p. buckets), not a raw float median. `settle_bond` requires
+`status == FINAL`; a still-challengeable `SETTLED` result cannot assign
+a payee. Cross-contract reads go through `gl.get_contract_at` /
+`@gl.contract_interface` in the deterministic context, as required by
+GenVM.

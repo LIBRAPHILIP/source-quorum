@@ -17,6 +17,9 @@ collections; the schema below is the contract.
 | `min_coverage` | int ≥ min_quorum | Successful fetches required |
 | `tolerance_bps` | int | Numeric band (0 for non-numeric) |
 | `challenge_budget` | int 0–3 | How many extra sources may be added |
+| `challenge_window_secs` | int | 86400 when budget > 0, else 0. Not skippable. |
+| `settled_at` | unix secs | Last resolve time (tx datetime) |
+| `challenge_open_until` | unix secs | Finalize blocked while `now < this` |
 | `challenges_used` | int | Consumed budget |
 | `status` | see machine | Lifecycle |
 | `sources` | `{url,label}[]` | Locked after `lock_sources` |
@@ -46,14 +49,15 @@ collections; the schema below is the contract.
                      ▼     │
               ┌── SETTLED ─┴── UNRESOLVED
               │     │              │
-              │     │ challenge()  │  (budget remaining, new URL)
+              │     │ challenge() while window open
               │     └──────┬───────┘
               │            ▼
               │       CHALLENGED ── resolve() ──► SETTLED / UNRESOLVED
+              │                   (SETTLED restarts the 24h window)
               │
-              │ finalize()
+              │ finalize() only after window closes
               ▼
-            FINAL     (get_settlement is now immutable)
+            FINAL     (QuorumBond may assign a payee only now)
 ```
 
 Illegal transitions raise (`sources_not_editable`, `not_resolvable`,
@@ -64,8 +68,8 @@ Illegal transitions raise (`sources_not_editable`, `not_resolvable`,
 - **Draft / lock** stops a resolver from racing a moving source set.
 - **Challenge as an extra source** is the smallest honest appeal: the
   next resolve must re-fetch the whole set, including the new URL.
-- **Finalize** is what composing contracts (`QuorumBond`) should wait
-  for when they cannot tolerate a later reopen.
+- **Finalize** cannot run during the challenge window. QuorumBond
+  settles only from `FINAL`, so a later challenge cannot flip a payee.
 - **UNRESOLVED is stored**, not thrown. Builders can wait, challenge,
   or give up without the last transaction reverting after expensive
   consensus.

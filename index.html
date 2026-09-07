@@ -111,7 +111,7 @@ self.claims[id] = persist(reports, settlement)</pre>
                                 │
                            resolve()
                                 │
-                           SETTLED ── finalize() → FINAL</div>
+                           SETTLED ── challenge window 24h ── finalize() → FINAL</div>
         <p>
           A challenge adds one new HTTPS URL and spends budget. The next
           resolve must re-fetch the whole expanded set. <code>FINAL</code> is
@@ -194,7 +194,7 @@ settlement = json.loads(oracle.view().get_settlement(claim_id))
             <tr><td><code>lock_sources</code></td><td>creator</td><td>Freeze the set</td></tr>
             <tr><td><code>resolve</code></td><td>anyone</td><td>Consensus extract + quorum</td></tr>
             <tr><td><code>challenge</code></td><td>anyone</td><td>Add one source, reopen</td></tr>
-            <tr><td><code>finalize</code></td><td>anyone</td><td>Freeze SETTLED → FINAL</td></tr>
+            <tr><td><code>finalize</code></td><td>anyone after window</td><td>Freeze SETTLED → FINAL; blocked while challenge window is open</td></tr>
           </tbody>
         </table>
         <h3>SourceQuorum views</h3>
@@ -241,9 +241,9 @@ node scripts/deploy.mjs studionet --with-bond</pre>
           <a href="./deployments/">deployments/</a>.
         </p>
         <p id="deploy-slot" class="note">
-          v1.1.0 on Studionet:
-          <a href="https://explorer-studio.genlayer.com/address/0xf1B7D908C2570d8073F027eeB3f481771a3394BD">https://explorer-studio.genlayer.com/address/0xf1B7D908C2570d8073F027eeB3f481771a3394BD</a>
-          · <code>get_meta.version</code> = <code>1.1.0-source-quorum</code>
+          v1.2.0 on Studionet:
+          <a href="https://explorer-studio.genlayer.com/address/0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476">https://explorer-studio.genlayer.com/address/0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476</a>
+          · <code>get_meta.version</code> = <code>1.2.0-source-quorum</code>
         </p>
       </section>
 

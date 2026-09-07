@@ -349,6 +349,45 @@ def payloads_equivalent(
     )
 
 
+DEFAULT_CHALLENGE_WINDOW_SECS = 86400
+
+
+def can_challenge(
+    status: str,
+    challenges_used: int,
+    challenge_budget: int,
+    now_ts: int,
+    challenge_open_until: int,
+) -> bool:
+    """Challenge is allowed only while the window is open and budget remains."""
+    if int(challenges_used) >= int(challenge_budget):
+        return False
+    if status == "UNRESOLVED":
+        return True
+    if status != "SETTLED":
+        return False
+    return int(now_ts) < int(challenge_open_until)
+
+
+def can_finalize(
+    status: str,
+    now_ts: int,
+    challenge_open_until: int,
+    challenge_budget: int,
+) -> bool:
+    """Finalize is impossible during an open challenge window."""
+    if status != "SETTLED":
+        return False
+    if int(challenge_budget) <= 0:
+        return True
+    return int(now_ts) >= int(challenge_open_until)
+
+
+def bond_may_settle(status: str, finalized: bool) -> bool:
+    """QuorumBond may assign a payee only from an immutable FINAL result."""
+    return bool(finalized) or str(status) == "FINAL"
+
+
 def bond_matches_range(
     numeric_ticks: int | None,
     expected_min: Any,

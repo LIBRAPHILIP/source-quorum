@@ -39,7 +39,7 @@ def test_create_lock_and_binary_quorum(direct_vm, direct_deploy, direct_alice):
         "2",
         "2",
         "0",
-        "1",
+        "0",
         "https://docs.genlayer.com/developers/intelligent-contracts/introduction,https://genlayer.com",
     )
     assert claim_id == "0"

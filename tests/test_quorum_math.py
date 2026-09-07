@@ -17,6 +17,9 @@ if ROOT not in sys.path:
 
 from lib.quorum_math import (  # noqa: E402
     bond_matches_range,
+    bond_may_settle,
+    can_challenge,
+    can_finalize,
     canonicalize_numeric,
     compute_quorum,
     median,
@@ -168,6 +171,25 @@ class TestNumericQuorum(unittest.TestCase):
         self.assertFalse(settlements_equivalent(low, high))
         self.assertTrue(bond_matches_range(high["numeric_ticks"], 100, 100))
         self.assertFalse(bond_matches_range(low["numeric_ticks"], 100, 100))
+
+
+class TestChallengeWindow(unittest.TestCase):
+    def test_cannot_finalize_during_window(self):
+        self.assertFalse(can_finalize("SETTLED", now_ts=100, challenge_open_until=200, challenge_budget=1))
+        self.assertTrue(can_finalize("SETTLED", now_ts=200, challenge_open_until=200, challenge_budget=1))
+
+    def test_challenge_only_inside_window(self):
+        self.assertTrue(can_challenge("SETTLED", 0, 1, now_ts=100, challenge_open_until=200))
+        self.assertFalse(can_challenge("SETTLED", 0, 1, now_ts=200, challenge_open_until=200))
+        self.assertFalse(can_challenge("FINAL", 0, 1, now_ts=100, challenge_open_until=200))
+
+    def test_zero_budget_finalize_immediately(self):
+        self.assertTrue(can_finalize("SETTLED", now_ts=1, challenge_open_until=999, challenge_budget=0))
+        self.assertFalse(can_challenge("SETTLED", 0, 0, now_ts=1, challenge_open_until=999))
+
+    def test_bond_requires_final(self):
+        self.assertFalse(bond_may_settle("SETTLED", False))
+        self.assertTrue(bond_may_settle("FINAL", True))
 
 
 class TestEquivalence(unittest.TestCase):

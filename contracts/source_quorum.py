@@ -15,16 +15,18 @@ This is not a thin LLM wrapper and not a single-URL "AI decides X" demo.
 from genlayer import *
 
 import json
+import time
 import typing
 
 
-VERSION = "1.1.0-source-quorum"
+VERSION = "1.2.0-source-quorum"
 MAX_SOURCES = 8
 MIN_SOURCES = 2
 MIN_QUORUM = 2
 MAX_QUESTION = 2000
 MIN_QUESTION = 16
 MAX_CHALLENGE_BUDGET = 3
+DEFAULT_CHALLENGE_WINDOW_SECS = 86400
 BODY_LIMIT = 12000
 
 CLAIM_TYPES = ("BINARY", "ENUM", "NUMERIC")
@@ -59,7 +61,7 @@ class SourceQuorum(gl.Contract):
             "claim_count": str(self.claim_count),
             "primitive": "multi-source-quorum-oracle",
             "consensus": "run_nondet_unsafe independent re-fetch + canonical settlement",
-            "settlement": "quorum inside consensus; numeric_ticks exact match",
+            "settlement": "quorum inside consensus; numeric_ticks exact match; bond reads FINAL only",
             "claim_types": ",".join(CLAIM_TYPES),
             "statuses": ",".join(STATUSES),
         }
@@ -94,7 +96,12 @@ class SourceQuorum(gl.Contract):
                 "numeric_value": rec.get("numeric_value"),
                 "numeric_ticks": rec.get("numeric_ticks"),
                 "finalized": rec["status"] == "FINAL",
+                "immutable": rec["status"] == "FINAL",
                 "settled": rec["status"] in ("SETTLED", "FINAL"),
+                "challenge_open_until": rec.get("challenge_open_until", "0"),
+                "settled_at": rec.get("settled_at", "0"),
+                "can_challenge": _can_challenge(rec, _now_ts()),
+                "can_finalize": _can_finalize(rec, _now_ts()),
                 "tally": rec.get("tally", {}),
                 "coverage": rec.get("coverage", 0),
                 "usable": rec.get("usable", 0),
@@ -133,7 +140,7 @@ class SourceQuorum(gl.Contract):
             "not_compared": "excerpt, rationale, confidence, raw HTML",
             "compared": "url set, fetch_ok, outcome; settlement status/outcome/numeric_ticks exact",
             "gate": "UNRESOLVED vs a concrete outcome is never equivalent — forces retry.",
-            "settlement": "Quorum math runs inside consensus. NUMERIC stores integer ticks, not a raw leader median.",
+            "settlement": "Quorum math runs inside consensus. NUMERIC stores integer ticks. Finalize waits out the challenge window. QuorumBond pays only from FINAL.",
             "compose": "Call get_settlement(claim_id) from another Intelligent Contract.",
         }
 
@@ -208,7 +215,10 @@ class SourceQuorum(gl.Contract):
             "min_coverage": coverage,
             "tolerance_bps": tol,
             "challenge_budget": budget,
+            "challenge_window_secs": DEFAULT_CHALLENGE_WINDOW_SECS if budget > 0 else 0,
             "challenges_used": 0,
+            "settled_at": "0",
+            "challenge_open_until": "0",
             "status": "DRAFT",
             "sources": sources,
             "reports": [],
@@ -322,6 +332,13 @@ class SourceQuorum(gl.Contract):
         rec["quorum_met"] = settlement["quorum_met"]
         rec["resolve_count"] = int(rec.get("resolve_count", 0)) + 1
         rec["status"] = SETTLED if settlement["status"] == SETTLED else UNRESOLVED
+        now = _now_ts()
+        rec["settled_at"] = str(now)
+        window = int(rec.get("challenge_window_secs") or 0)
+        if rec["status"] == SETTLED and int(rec.get("challenge_budget", 0)) > 0:
+            rec["challenge_open_until"] = str(now + window)
+        else:
+            rec["challenge_open_until"] = str(now)
         self._write(rec)
         return json.dumps(
             {
@@ -348,8 +365,12 @@ class SourceQuorum(gl.Contract):
         rec = self._require(claim_id)
         if rec["status"] not in (SETTLED, UNRESOLVED):
             raise Exception("not_challengeable")
-        if int(rec["challenges_used"]) >= int(rec["challenge_budget"]):
-            raise Exception("challenge_budget_exhausted")
+        if rec["status"] == "FINAL":
+            raise Exception("already_final")
+        if not _can_challenge(rec, _now_ts()):
+            if int(rec["challenges_used"]) >= int(rec["challenge_budget"]):
+                raise Exception("challenge_budget_exhausted")
+            raise Exception("challenge_window_closed")
         reason = (reason or "").strip()
         if len(reason) < 8:
             raise Exception("challenge_reason_too_short")
@@ -380,8 +401,11 @@ class SourceQuorum(gl.Contract):
         rec = self._require(claim_id)
         if rec["status"] != SETTLED:
             raise Exception("only_settled_can_finalize")
+        if not _can_finalize(rec, _now_ts()):
+            raise Exception("challenge_window_open")
         rec["status"] = "FINAL"
         rec["reason"] = "finalized"
+        rec["finalized_at"] = str(_now_ts())
         self._write(rec)
         return rec["status"]
 
@@ -413,6 +437,29 @@ class SourceQuorum(gl.Contract):
     def _only_creator(self, rec: dict) -> None:
         if rec.get("creator", "").lower() != gl.message.sender_address.as_hex.lower():
             raise Exception("only_creator")
+
+
+def _now_ts() -> int:
+    return int(time.time())
+
+
+def _can_challenge(rec: dict, now: int) -> bool:
+    if int(rec.get("challenges_used", 0)) >= int(rec.get("challenge_budget", 0)):
+        return False
+    status = rec.get("status", "")
+    if status == UNRESOLVED:
+        return True
+    if status != SETTLED:
+        return False
+    return now < int(rec.get("challenge_open_until") or 0)
+
+
+def _can_finalize(rec: dict, now: int) -> bool:
+    if rec.get("status") != SETTLED:
+        return False
+    if int(rec.get("challenge_budget", 0)) <= 0:
+        return True
+    return now >= int(rec.get("challenge_open_until") or 0)
 
 
 # ======================================================================

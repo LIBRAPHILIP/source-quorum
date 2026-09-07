@@ -17,7 +17,7 @@ This repository is a contract primitive, not a product app.
 | Consensus spec | [`docs/CONSENSUS.md`](docs/CONSENSUS.md) |
 | State machine | [`docs/STATE.md`](docs/STATE.md) |
 | Docs site | https://source-quorum.vercel.app |
-| Live v1.1.0 (Studionet) | [`0xf1B7D908C2570d8073F027eeB3f481771a3394BD`](https://explorer-studio.genlayer.com/address/0xf1B7D908C2570d8073F027eeB3f481771a3394BD) |
+| Live v1.2.0 (Studionet) | [`0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476`](https://explorer-studio.genlayer.com/address/0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476) |
 
 ## Why this exists
 
@@ -60,8 +60,9 @@ create_claim → add_source* → lock_sources
         ▼
    SETTLED | UNRESOLVED
         │
-        ├─ challenge(extra_url) → CHALLENGED → resolve again
-        └─ finalize() → FINAL   # immutable consumer API
+        ├─ challenge(extra_url) only while challenge_open_until
+        └─ finalize() only after that window → FINAL
+           QuorumBond settle_bond requires FINAL
 ```
 
 Full rules: [`docs/CONSENSUS.md`](docs/CONSENSUS.md).
@@ -79,7 +80,7 @@ This follows GenLayer's documented production pattern: custom `run_nondet_unsafe
 | `lock_sources(claim_id)` | write | Freeze the URL set |
 | `resolve(claim_id)` | write | Multi-source consensus + quorum |
 | `challenge(claim_id, extra_url, extra_label, reason)` | write | Add one source, reopen |
-| `finalize(claim_id)` | write | Freeze a `SETTLED` claim |
+| `finalize(claim_id)` | write | Freeze after the challenge window; not callable immediately |
 | `get_settlement(claim_id)` | view | **Consumer API** |
 | `get_claim` / `list_claims` / `get_meta` / `describe_primitive` | view | Inspection |
 
@@ -146,18 +147,18 @@ PRIVATE_KEY=0x… npm run deploy:bradbury
 
 Addresses are written to `deployments/source-quorum-<chainId>.json`.
 
-## Live v1.1.0 (submit this Explorer URL)
+## Live v1.2.0 (submit this Explorer URL)
 
-On-chain `get_meta.version` is `1.1.0-source-quorum`. Canonical `numeric_ticks` are compared inside consensus.
+On-chain `get_meta.version` is `1.2.0-source-quorum`. Challenge window is 24h; QuorumBond settles only from `FINAL`.
 
 ```
-https://explorer-studio.genlayer.com/address/0xf1B7D908C2570d8073F027eeB3f481771a3394BD
+https://explorer-studio.genlayer.com/address/0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476
 ```
 
-QuorumBond (consumer): `0xb9e82942D4397258C143fE3Aa0bA1078Fc1a61fB`  
-Deploy tx: `0x18d83c23add7b08a275edd19fb41f117fe0b5ceb1014706e51ff9605d6904a43`
+QuorumBond (consumer): `0x19B4C3157bc73e218ffd9966f1a7c28093d33D83`  
+Deploy tx: `0x985ea482cf79086df97bba2982d21e67d523a531038c42b5159ecb31c44e19c8`
 
-Do not resubmit a v1.0.0 address.
+Do not resubmit a v1.0.0 or v1.1.0 address.
 
 ## What this is not
 

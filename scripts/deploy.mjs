@@ -125,8 +125,8 @@ async function main() {
     });
     console.log("get_meta:", meta);
     const ver = String(meta?.version || "");
-    if (!ver.includes("1.1.0")) {
-      throw new Error("Deployed version is not 1.1.0: " + ver);
+    if (!ver.includes("1.2.0")) {
+      throw new Error("Deployed version is not 1.2.0: " + ver);
     }
   } catch (e) {
     if (String(e.message || e).includes("not 1.1.0")) throw e;
@@ -134,7 +134,7 @@ async function main() {
   }
   const payload = {
     primitive: "SourceQuorum",
-    version: "1.1.0-source-quorum",
+    version: "1.2.0-source-quorum",
     address: oracle.address,
     chainId: chain.id,
     network: netName,

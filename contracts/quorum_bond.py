@@ -18,7 +18,7 @@ import json
 import typing
 
 
-VERSION = "1.1.0-quorum-bond"
+VERSION = "1.2.0-quorum-bond"
 NUMERIC_SCALE = 10000
 
 
@@ -146,8 +146,9 @@ class QuorumBond(gl.Contract):
     @gl.public.write
     def settle_bond(self, bond_id: str) -> str:
         """
-        Read the oracle once the claim is SETTLED or FINAL, then assign payee.
-        Idempotent: a later appeal-driven re-call does not flip a decided bond.
+        Read the oracle only after the claim is FINAL (immutable).
+        SETTLED is still challengeable and must not assign a payee.
+        Idempotent: a later re-call does not flip a decided bond.
         """
         rec = self._require(bond_id)
         if rec["status"] != "OPEN":
@@ -155,8 +156,9 @@ class QuorumBond(gl.Contract):
 
         settlement = self._read_settlement(rec["claim_id"])
         status = str(settlement.get("status", ""))
-        if status not in ("SETTLED", "FINAL"):
-            raise Exception("claim_not_settled")
+        finalized = bool(settlement.get("finalized") or settlement.get("immutable"))
+        if status != "FINAL" and not finalized:
+            raise Exception("claim_not_final")
 
         matched = _matches(rec, settlement)
         rec["resolution_status"] = status
