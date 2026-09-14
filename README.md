@@ -17,7 +17,7 @@ This repository is a contract primitive, not a product app.
 | Consensus spec | [`docs/CONSENSUS.md`](docs/CONSENSUS.md) |
 | State machine | [`docs/STATE.md`](docs/STATE.md) |
 | Docs site | https://source-quorum.vercel.app |
-| Live v1.2.0 (Studionet) | [`0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476`](https://explorer-studio.genlayer.com/address/0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476) |
+| Live v1.2.0 (Studionet) | [`0xb27f917999649249F85bfBB0d4a44Ef97B433916`](https://explorer-studio.genlayer.com/address/0xb27f917999649249F85bfBB0d4a44Ef97B433916) |
 
 ## Why this exists
 
@@ -149,16 +149,21 @@ Addresses are written to `deployments/source-quorum-<chainId>.json`.
 
 ## Live v1.2.0 (submit this Explorer URL)
 
-On-chain `get_meta.version` is `1.2.0-source-quorum`. Challenge window is 24h; QuorumBond settles only from `FINAL`.
+On-chain `get_meta` for this address:
+
+- `version` = `1.2.0-source-quorum`
+- `challenge_window_secs` = `86400`
+- `finalize_rule` = `blocked_while_challenge_window_open`
+- `bond_rule` = `FINAL_only`
 
 ```
-https://explorer-studio.genlayer.com/address/0x4c9930DC11Cad44dA46CBB3Cd5D6C73BC2fba476
+https://explorer-studio.genlayer.com/address/0xb27f917999649249F85bfBB0d4a44Ef97B433916
 ```
 
-QuorumBond (consumer): `0x19B4C3157bc73e218ffd9966f1a7c28093d33D83`  
-Deploy tx: `0x985ea482cf79086df97bba2982d21e67d523a531038c42b5159ecb31c44e19c8`
+QuorumBond (consumer): `0x6B35E3C416BE0d6C2eE316f53457fFFeCCD556d2`  
+Deploy tx: `0x1d8463eacf01ece52967a36f336accbfaaf8c59799c37299a456e851f35b1a42`
 
-Do not resubmit a v1.0.0 or v1.1.0 address.
+Do **not** resubmit older addresses (`0xf1B7D9…`, `0x4c9930…`). Those are previous bytecodes.
 
 ## What this is not
 

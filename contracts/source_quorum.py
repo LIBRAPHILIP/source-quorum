@@ -62,6 +62,9 @@ class SourceQuorum(gl.Contract):
             "primitive": "multi-source-quorum-oracle",
             "consensus": "run_nondet_unsafe independent re-fetch + canonical settlement",
             "settlement": "quorum inside consensus; numeric_ticks exact match; bond reads FINAL only",
+            "challenge_window_secs": str(DEFAULT_CHALLENGE_WINDOW_SECS),
+            "finalize_rule": "blocked_while_challenge_window_open",
+            "bond_rule": "FINAL_only",
             "claim_types": ",".join(CLAIM_TYPES),
             "statuses": ",".join(STATUSES),
         }

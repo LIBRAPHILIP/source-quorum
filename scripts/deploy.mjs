@@ -128,10 +128,29 @@ async function main() {
     if (!ver.includes("1.2.0")) {
       throw new Error("Deployed version is not 1.2.0: " + ver);
     }
+    if (String(meta?.finalize_rule || "") !== "blocked_while_challenge_window_open") {
+      throw new Error("Deployed bytecode missing challenge-window finalize_rule: " + JSON.stringify(meta));
+    }
+    if (String(meta?.bond_rule || "") !== "FINAL_only") {
+      throw new Error("Deployed bytecode missing FINAL_only bond_rule: " + JSON.stringify(meta));
+    }
   } catch (e) {
-    if (String(e.message || e).includes("not 1.1.0")) throw e;
-    console.log("get_meta wait/read:", e.message || e);
+    const msg = String(e.message || e);
+    if (
+      msg.includes("not 1.2.0") ||
+      msg.includes("finalize_rule") ||
+      msg.includes("bond_rule")
+    ) {
+      throw e;
+    }
+    console.log("get_meta wait/read:", msg);
   }
+  const explorerHost =
+    netName === "bradbury"
+      ? "https://explorer-bradbury.genlayer.com"
+      : netName === "studionet"
+        ? "https://explorer-studio.genlayer.com"
+        : "";
   const payload = {
     primitive: "SourceQuorum",
     version: "1.2.0-source-quorum",
@@ -139,6 +158,7 @@ async function main() {
     chainId: chain.id,
     network: netName,
     deployTx: oracle.txHash,
+    explorer: explorerHost ? `${explorerHost}/address/${oracle.address}` : "",
     deployedAt: new Date().toISOString(),
   };
 
